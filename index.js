@@ -76,7 +76,7 @@ function appendData(data) {
 	mainContainer.innerHTML = "";
 	MapChaged(data.MapName);
 
-	if (CurrentMap.includes("None")) 
+	if (CurrentMap.includes("None") && data.MaxHP == 0) 
 	{
 		isStarted = false;
 	}

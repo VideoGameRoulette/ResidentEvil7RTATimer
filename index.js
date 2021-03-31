@@ -6,15 +6,32 @@ const JSON_ENDPOINT = `http://${JSON_ADDRESS}:${JSON_PORT}/`;
 
 var json;
 
+const CurrentTime = () => {
+	return Date.now();
+}
+
 var PreviousMap = "";
 var CurrentMap = "";
-var isStarted = false;
-var isEnded = false;
 var showTotal = false;
 var endGame = false;
-var start = 0;
-var end = 0;
+var timer = { start: null, end: null, completed: false }
+var ballast = 0;
+
+var paused = { start: null, end: null };
+
+const timerStarted = () => {
+	return Boolean(timer.start);
+}
+
+const timerEnded = () => {
+	return timer.completed;
+}
+
 var time = 0;
+
+const IsLoadingOrPaused = data => {
+	return data.GameState == 4 || data.GameState == 8 || data.GameState == 256 || data.GameState == 512 || data.GameState == 262400 || data.GameState == 262144;
+}
 
 window.onload = function () {
 	getData();
@@ -57,8 +74,8 @@ function IsMapChaging(_MapName) {
 
 const pad = i => i.toString().padStart(2, '0');
 
-const timeDiff = (start, end) => {
-  const timestamp = Math.floor((end - start) / 1000);
+const timeDiff = () => {
+  const timestamp = Math.floor((timer.end - (timer.start + ballast)) / 1000);
 
   const hours = Math.floor(timestamp / 60 / 60);
   const minutes = Math.floor(timestamp / 60) - hours * 60;
@@ -76,10 +93,8 @@ const timeDiff = (start, end) => {
 function IsRunStarted() {
 	if (PreviousMap.includes("None") && CurrentMap.includes("Ship3FInfirmaryPast")) 
 	{
-		start = Date.now();
-		isStarted = true;
-		isEnded = false;
-		showTotal = false;
+		timer.start = CurrentTime();
+		ballast = 0;
 		PreviousMap = CurrentMap;
 		console.log("New Run Started Resetting Timer...");
 	}
@@ -87,38 +102,32 @@ function IsRunStarted() {
 
 function IsRunEnded(data) {
 	
-	if (PreviousMap.includes("c01Outside01") && endGame && data.PlayerInventory[0].ItemName == null && isStarted && !isEnded)
+	if (PreviousMap.includes("c01Outside01") && endGame && data.PlayerInventory[0].ItemName == null && timerStarted() && !timerEnded())
 	{
-		isStarted = false;
-		isEnded = true;
+		timer.completed = true;
 		console.log("Run Finished...", time.formatted);
 	}
 }
 
 function IsTimerRunning(mainContainer) {
-	if (isStarted && !isEnded)
+	if (timerStarted() && !timerEnded())
 	{
-		end = Date.now();
-		time = timeDiff(start, end);
-
+		timer.end = CurrentTime();
 		mainContainer.innerHTML += `
 		<div class="tag">
 			<i class="fas fa-clock"></i>
 		</div>
-		<div id="value"><font size="4" color="#FFF">${time.formatted}</font></div>`;
+		<div id="value"><font size="4" color="#FFF">${timeDiff().formatted}</font></div>`;
 	}
-	else if (!isStarted && isEnded && !showTotal)
+	else if (timerEnded())
 	{
-		end = Date.now();
-		time = timeDiff(start, end);
-		showTotal = true;
 		mainContainer.innerHTML += `
 		<div class="tag">
 			<i class="fas fa-clock"></i>
 		</div>
-		<div id="value"><font size="4" color="#00FF00">${time.formatted}</font></div>`;
+		<div id="value"><font size="4" color="#00FF00">${timeDiff().formatted}</font></div>`;
 	}
-	else if (!isStarted && !isEnded)
+	else
 	{
 		mainContainer.innerHTML += `
 		<div class="tag">
@@ -126,24 +135,45 @@ function IsTimerRunning(mainContainer) {
 		</div>
 		<div id="value"><font size="4" color="#FFF">00:00:00</font></div>`;
 	}
-	else if (showTotal)
-	{
-		mainContainer.innerHTML += `
-		<div class="tag">
-			<i class="fas fa-clock"></i>
-		</div>
-		<div id="value"><font size="4" color="#00FF00">${time.formatted}</font></div>`;
-	}
 }
 
 function appendData(data) {
 	var mainContainer = document.getElementById("srtQueryData");
 	mainContainer.innerHTML = "";
+	
+	var pauseCheck = IsLoadingOrPaused(data);
+	
+	//GAME PAUSED OR LOADING
+	if (timerStarted() && pauseCheck)
+	{
+		if (paused.start == null) 
+		{ 
+			paused.start = CurrentTime(); 
+		}
+		paused.end = CurrentTime();
+
+		//TODO add real time pause edit
+		//ballast = (paused.end - paused.start);
+	}
+	
+	//GAME NOT PAUSED OR LOADING
+	else if (timerStarted() && !pauseCheck)
+	{
+		if (paused.start != null) 
+		{
+			ballast = (paused.end - paused.start) + ballast;
+			paused.start = null;
+			paused.end = null;
+		}
+		console.log(ballast);
+	}
+
 	IsMapChaging(data.MapName);
 	IsRunStarted();
-	if (!endGame) 
-	{ 
-		endGame = (data.PlayerInventory[0].ItemName != null) ? data.PlayerInventory[0].ItemName.includes("Handgun_Albert") : false;
+	if (timerStarted() && !endGame) 
+	{
+		console.log(timerStarted());
+		//endGame = (data.PlayerInventory[0] != null) ? data.PlayerInventory[0].ItemName.includes("Handgun_Albert") : false;
 		if (endGame) { console.log("End Game Detected..."); }
 	}
 	IsRunEnded(data);

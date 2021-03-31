@@ -10,6 +10,8 @@ var PreviousMap = "";
 var CurrentMap = "";
 var isStarted = false;
 var isEnded = false;
+var showTotal = false;
+var endGame = false;
 var start = 0;
 var end = 0;
 var time = 0;
@@ -44,7 +46,7 @@ function getData() {
 		});
 }
 
-function MapChaged(_MapName) {
+function IsMapChaging(_MapName) {
 	if (_MapName != CurrentMap)
 	{
 		PreviousMap = CurrentMap;
@@ -71,56 +73,79 @@ const timeDiff = (start, end) => {
   };
 };
 
-function appendData(data) {
-	var mainContainer = document.getElementById("srtQueryData");
-	mainContainer.innerHTML = "";
-	MapChaged(data.MapName);
-
-	if (CurrentMap.includes("None") && data.MaxHP == 0) 
-	{
-		isStarted = false;
-	}
-
-	if (CurrentMap.includes("Ship3FInfirmaryPast") && !CurrentMap.includes("뇐") && !isStarted)
+function IsRunStarted() {
+	if (PreviousMap.includes("None") && CurrentMap.includes("Ship3FInfirmaryPast")) 
 	{
 		start = Date.now();
 		isStarted = true;
 		isEnded = false;
-		console.log("New Run Started Reseting Boss Values...");
-		InitBosses();
-		console.log(enemyHP);
+		showTotal = false;
+		PreviousMap = CurrentMap;
+		console.log("New Run Started Resetting Timer...");
 	}
+}
 
-	if (PreviousMap.includes("irs01A_Action") && CurrentMap.includes("None") && isStarted && !isEnded)
+function IsRunEnded(data) {
+	
+	if (PreviousMap.includes("c01Outside01") && endGame && data.PlayerInventory[0].ItemName == null && isStarted && !isEnded)
 	{
 		isStarted = false;
 		isEnded = true;
-		console.log("Run Finished Reseting Boss Values...");
-		console.log(enemyHP);
+		console.log("Run Finished...", time.formatted);
 	}
+}
 
+function IsTimerRunning(mainContainer) {
 	if (isStarted && !isEnded)
 	{
 		end = Date.now();
 		time = timeDiff(start, end);
-		//console.log(time);
-		
+
 		mainContainer.innerHTML += `
 		<div class="tag">
 			<i class="fas fa-clock"></i>
 		</div>
 		<div id="value"><font size="4" color="#FFF">${time.formatted}</font></div>`;
 	}
-	else if (!isStarted)
+	else if (!isStarted && isEnded && !showTotal)
 	{
 		end = Date.now();
 		time = timeDiff(start, end);
-		//console.log(time);
-		
+		showTotal = true;
+		mainContainer.innerHTML += `
+		<div class="tag">
+			<i class="fas fa-clock"></i>
+		</div>
+		<div id="value"><font size="4" color="#00FF00">${time.formatted}</font></div>`;
+	}
+	else if (!isStarted && !isEnded)
+	{
 		mainContainer.innerHTML += `
 		<div class="tag">
 			<i class="fas fa-clock"></i>
 		</div>
 		<div id="value"><font size="4" color="#FFF">00:00:00</font></div>`;
 	}
+	else if (showTotal)
+	{
+		mainContainer.innerHTML += `
+		<div class="tag">
+			<i class="fas fa-clock"></i>
+		</div>
+		<div id="value"><font size="4" color="#00FF00">${time.formatted}</font></div>`;
+	}
+}
+
+function appendData(data) {
+	var mainContainer = document.getElementById("srtQueryData");
+	mainContainer.innerHTML = "";
+	IsMapChaging(data.MapName);
+	IsRunStarted();
+	if (!endGame) 
+	{ 
+		endGame = (data.PlayerInventory[0].ItemName != null) ? data.PlayerInventory[0].ItemName.includes("Handgun_Albert") : false;
+		if (endGame) { console.log("End Game Detected..."); }
+	}
+	IsRunEnded(data);
+	IsTimerRunning(mainContainer);
 }
